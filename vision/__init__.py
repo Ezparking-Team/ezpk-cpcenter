@@ -1,4 +1,7 @@
+import random
+
 import cv2
+import numpy as np
 
 from vision.find_car_number import FindCarNumber
 
@@ -23,4 +26,33 @@ class Vision:
     @staticmethod
     def divided_image(cropped):
         """分割车牌"""
-        return FindCarNumber.cut_text(cropped)
+        divided = FindCarNumber.cut_text_peak(cropped)
+
+        for key in divided:
+            # 调整大小
+            divided[key] = cv2.resize(
+                divided[key],
+                (32, 32),
+                interpolation=cv2.INTER_CUBIC
+            )
+
+            # 高斯
+            divided[key] = cv2.GaussianBlur(
+                divided[key],
+                (3, 3), 16
+            )
+
+            # 保留蓝色区域
+            lower_blue = np.array([0, 0, 130])
+            higher_blue = np.array([255, 80, 255])
+
+            divided[key] = cv2.cvtColor(divided[key], cv2.COLOR_BGR2HSV)
+            divided[key] = cv2.inRange(divided[key], lower_blue, higher_blue)
+
+            # 保存图片
+            if key == "region":
+                cv2.imwrite("demo_images/regions/%s.jpg" % random.randint(1, 999999999), divided[key])
+            else:
+                cv2.imwrite("demo_images/chars/%s.jpg" % random.randint(1, 999999999), divided[key])
+
+        return divided

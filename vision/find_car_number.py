@@ -5,6 +5,9 @@ import numpy as np
 
 import settings
 
+import matplotlib.pyplot as plt
+from matplotlib.font_manager import FontProperties
+
 
 class FindCarNumber:
     def __init__(self, image):
@@ -93,7 +96,7 @@ class FindCarNumber:
 
         # 记录车牌位置
         object_list = []
-        offset = 0
+        offset = -3
 
         for r in filtered:  # 遍历轮廓列表
             object_list.append(([r[0] - offset, r[1] - offset], [r[2] + offset, r[3] + offset]))
@@ -146,4 +149,104 @@ class FindCarNumber:
         # cv2.imshow("image", image)
         # cv2.waitKey()
 
+        cut_images.pop("spacer")
+
         return cut_images
+
+    @staticmethod
+    def cut_text_peak(image):
+        """
+        剪切车牌字符（平均峰值法）
+        :return:
+        """
+
+        or_image = image
+
+        h = image.shape[0]
+        w = image.shape[1]
+
+        # 灰度
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # 高斯
+        image = cv2.GaussianBlur(
+            image,
+            (3, 3), 4
+        )
+
+        # 自适应曝光
+        blocks = []
+        for th_min in range(90, 150, 5):
+            # 二值化
+            ret, image = cv2.threshold(image, th_min, 255, cv2.THRESH_BINARY)
+
+            # 闭操作
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, h * 2))  # 定义方框大小
+            image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)  # 闭操作
+
+            # 计算峰值
+            row_key = 0
+            col_key = 0
+            xl = []
+            for line in image:
+                for cell in line:
+                    if row_key == 0:
+                        xl.append(int(cell))
+                    else:
+                        xl[col_key] = xl[col_key] + int(cell)
+                    col_key = col_key + 1
+
+                col_key = 0
+                row_key = row_key + 1
+
+            plt.bar(range(len(xl)), xl)
+            plt.show()
+
+            # 计算块宽度
+            last = 0
+            block_width = 0
+            blocks_start_point = 0
+            point = 0  # 指针x轴位置
+            for y in xl:
+                if y == 0 and last == 0:  # 空区
+                    pass
+                elif y != 0 and last == 0:  # 块起始
+                    block_width = 1
+                    blocks_start_point = point - 2
+                elif y != 0 and last != 0:  # 块中
+                    block_width += 1
+                elif y == 0 and last != 0:  # 块末
+                    blocks.append([blocks_start_point, block_width])
+                    block_width = 0
+                    blocks_start_point = 0
+                last = y
+                point += 1
+
+            if len(blocks) == 7:
+                break
+
+        print(blocks)
+
+        # 画图
+        t = 0
+        show_image = or_image
+        for b in blocks:
+            bp = b[0]
+            bl = b[1]
+
+            left_x = bp
+            right_x = bp + bl
+            cv2.line(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
+            cv2.rectangle(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
+
+            t += bl
+
+        cv2.imshow("", show_image)
+
+        cut_images = {
+
+        }
+
+        cv2.waitKey()
+
+        return
