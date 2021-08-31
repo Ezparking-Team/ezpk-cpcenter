@@ -273,7 +273,10 @@ class FindCarNumber:
 
             blocks_score.append(score)
 
-        optimal_k = ToolKit.index_number(blocks_score, standard)["index"]  # 最优解
+        try:
+            optimal_k = ToolKit.index_number(blocks_score, standard)["index"]  # 最优解
+        except IndexError:
+            raise IndexError("Can't cut text by peak method!")
 
         # print("opt", optimal_k)
 
@@ -298,7 +301,7 @@ class FindCarNumber:
             t += bl
 
         # 显示图片
-        cv2.imshow("test", show_image)
+        # cv2.imshow("test", show_image)
         # for cut in cut_images:
         #     cv2.imshow(str(random.randint(0, 999)), cut)
         # cv2.waitKey()

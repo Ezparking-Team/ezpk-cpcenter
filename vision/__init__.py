@@ -17,7 +17,10 @@ class Vision:
 
     def cropped_image(self, pos):
         """裁剪图片至车牌"""
-        pos = pos[0]
+        try:
+            pos = pos[0]
+        except IndexError:
+            raise ValueError("Plate not found!")
 
         cropped = self.image[pos[0][1]:pos[1][1], pos[0][0]:pos[1][0]]
 
@@ -26,7 +29,11 @@ class Vision:
     @staticmethod
     def divided_image(cropped):
         """分割车牌"""
-        divided = FindCarNumber.cut_text_peak(cropped)
+        try:
+            divided = FindCarNumber.cut_text_peak(cropped)
+        except IndexError as e:  # 无法使用峰值法，则用裁剪法
+            print(e)
+            divided = FindCarNumber.cut_text(cropped)
 
         for key in divided:
             # 调整大小
@@ -39,15 +46,15 @@ class Vision:
             # 高斯
             # divided[key] = cv2.GaussianBlur(
             #     divided[key],
-            #     (3, 3), 16
+            #     (3, 3), 1
             # )
 
-            # # 保留蓝色区域
-            # lower_blue = np.array([0, 0, 130])
-            # higher_blue = np.array([255, 80, 255])
-            #
-            # divided[key] = cv2.cvtColor(divided[key], cv2.COLOR_BGR2HSV)
-            # divided[key] = cv2.inRange(divided[key], lower_blue, higher_blue)
+            # 保留蓝色区域
+            lower_blue = np.array([0, 30, 180])
+            higher_blue = np.array([360, 200, 360])
+
+            divided[key] = cv2.cvtColor(divided[key], cv2.COLOR_BGR2HSV)
+            divided[key] = cv2.inRange(divided[key], lower_blue, higher_blue)
 
             # 保存图片
             if key == "region":
