@@ -158,6 +158,7 @@ class FindCarNumber:
 
     @staticmethod
     def cut_text_peak(image):
+        print("peak")
         """
         剪切车牌字符（平均峰值法）
         :return:
@@ -211,10 +212,10 @@ class FindCarNumber:
                 row_key = row_key + 1
 
             # 展示图表
-            plt.title("th_min: %d" % th_min)
-            plt.plot(xl)
+            # plt.title("th_min: %d" % th_min)
+            # plt.plot(xl)
             # plt.imshow(or_image)
-            plt.show()
+            # plt.show()
 
             # 计算块宽度
             last = 0
@@ -298,8 +299,9 @@ class FindCarNumber:
 
         # 显示图片
         cv2.imshow("test", show_image)
-        for cut in cut_images:
-            cv2.imshow(str(random.randint(0, 999)), cut)
+        # for cut in cut_images:
+        #     cv2.imshow(str(random.randint(0, 999)), cut)
+        # cv2.waitKey()
 
         used_time = time.time() - t1
 
@@ -307,4 +309,12 @@ class FindCarNumber:
 
         cv2.waitKey()
 
-        return cut_images
+        return {
+            "region": cut_images[0],
+            "region-city": cut_images[1],
+            "char-1": cut_images[3],
+            "char-2": cut_images[4],
+            "char-3": cut_images[5],
+            "char-4": cut_images[6],
+            "char-5": cut_images[7]
+        }
