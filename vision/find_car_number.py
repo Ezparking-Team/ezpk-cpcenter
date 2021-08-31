@@ -1,3 +1,4 @@
+import random
 import time
 
 import cv2
@@ -7,6 +8,8 @@ import settings
 
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
+
+from vision.toolkit import ToolKit
 
 
 class FindCarNumber:
@@ -113,7 +116,7 @@ class FindCarNumber:
     @staticmethod
     def cut_text(image):
         """
-        剪切车牌字符
+        剪切车牌字符(比例法)
         :return:
         """
 
@@ -159,11 +162,16 @@ class FindCarNumber:
         剪切车牌字符（平均峰值法）
         :return:
         """
+        t1 = time.time()
+
+        global binary, close
 
         or_image = image
 
         h = image.shape[0]
         w = image.shape[1]
+
+        # == 预处理 ==
 
         # 灰度
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -174,21 +182,24 @@ class FindCarNumber:
             (3, 3), 4
         )
 
-        # 自适应曝光
-        blocks = []
-        for th_min in range(90, 150, 5):
+        # == 自适应曝光 ==
+        blocks_list = []  # 8项表
+        for th_min in range(90, 170, 5):
+            """曝光度遍历指针"""
+            ctl_image = image
+
             # 二值化
-            ret, image = cv2.threshold(image, th_min, 255, cv2.THRESH_BINARY)
+            ret, ctl_image = cv2.threshold(ctl_image, th_min, 255, cv2.THRESH_BINARY)
 
             # 闭操作
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, h * 2))  # 定义方框大小
-            image = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)  # 闭操作
+            ctl_image = cv2.morphologyEx(ctl_image, cv2.MORPH_CLOSE, kernel)  # 闭操作
 
             # 计算峰值
             row_key = 0
             col_key = 0
             xl = []
-            for line in image:
+            for line in ctl_image:
                 for cell in line:
                     if row_key == 0:
                         xl.append(int(cell))
@@ -199,7 +210,10 @@ class FindCarNumber:
                 col_key = 0
                 row_key = row_key + 1
 
-            plt.bar(range(len(xl)), xl)
+            # 展示图表
+            plt.title("th_min: %d" % th_min)
+            plt.plot(xl)
+            # plt.imshow(or_image)
             plt.show()
 
             # 计算块宽度
@@ -207,46 +221,90 @@ class FindCarNumber:
             block_width = 0
             blocks_start_point = 0
             point = 0  # 指针x轴位置
-            for y in xl:
+            blocks = []  # 块列表，内部格式：(起始点, 块宽)
+            for y in xl:  # 指针位置判断
+                """y轴遍历指针"""
                 if y == 0 and last == 0:  # 空区
                     pass
                 elif y != 0 and last == 0:  # 块起始
                     block_width = 1
                     blocks_start_point = point - 2
+                    if blocks_start_point < 0:
+                        blocks_start_point = 0
                 elif y != 0 and last != 0:  # 块中
                     block_width += 1
                 elif y == 0 and last != 0:  # 块末
-                    blocks.append([blocks_start_point, block_width])
+                    # 记录距离
+                    blocks.append((blocks_start_point, block_width))
                     block_width = 0
                     blocks_start_point = 0
                 last = y
                 point += 1
 
-            if len(blocks) == 7:
-                break
+            if len(blocks) == 8:  # 块多于8项
+                blocks_list.append(blocks)  # 将当前块表加入8项表
 
-        print(blocks)
+        # print(blocks_list)
 
-        # 画图
+        # == 比例分权 ==
+        """
+        理论上来讲，车牌中一共有8个阈值高峰，
+        其中前2位、后5位的峰值宽度大致相同，中间最小阈值为分隔符。
+        
+        闽A  ·  88888
+        ^^   ^  ^^^^^
+        地   分  编
+        域   隔  号
+        
+        程序的逻辑是，从所有找出的blocks中，按照“规则”的近似度进行排序，即可找出最优解。
+        """
+
+        blocks_score = []  # 分权成绩
+        standard = 9 / 2 / 9  # 标准比例
+        for b_key in range(len(blocks_list)):
+            blocks = blocks_list[b_key]
+
+            region_aver = (blocks[0][1] + blocks[1][1]) / 2
+            point_aver = blocks[2][1]
+            number_aver = (blocks[3][1] + blocks[4][1] + blocks[5][1] + blocks[6][1] + blocks[7][1]) / 5
+
+            score = region_aver / point_aver / number_aver
+
+            blocks_score.append(score)
+
+        optimal_k = ToolKit.index_number(blocks_score, standard)["index"]  # 最优解
+
+        # print("opt", optimal_k)
+
+        # == 画线/剪切 ==
+        cut_images = []
         t = 0
         show_image = or_image
-        for b in blocks:
+        block = blocks_list[optimal_k]
+        for b in block:
             bp = b[0]
             bl = b[1]
 
+            # 划线
             left_x = bp
             right_x = bp + bl
-            cv2.line(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
-            cv2.rectangle(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
+            # cv2.line(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
+            # cv2.rectangle(show_image, [left_x, 0], [right_x, h], (0, 255, 0), 1)
+
+            # 剪切
+            cut_images.append(or_image[0:h, left_x:right_x])
 
             t += bl
 
-        cv2.imshow("", show_image)
+        # 显示图片
+        cv2.imshow("test", show_image)
+        for cut in cut_images:
+            cv2.imshow(str(random.randint(0, 999)), cut)
 
-        cut_images = {
+        used_time = time.time() - t1
 
-        }
+        print("usedTime", used_time)
 
         cv2.waitKey()
 
-        return
+        return cut_images
